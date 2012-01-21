@@ -1,3 +1,4 @@
+from datetime import datetime
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
@@ -250,11 +251,18 @@ class Application():
 		print("## Server commandline: " + " ".join(args))
 		print("## Terminate Bullgorge using Ctrl+C")
 		while True: # this shouldn't be a problem...
-			self.server = subprocess.Popen(args, stdin=None)
+			logf = None
+			if not self.args.no_log:
+				logfn = datetime.now().isoformat('-').replace(':', '-') + ".log"
+				print("## Opening log file '" + logfn + "'")
+				logf = open(logfn, 'wb')
+			self.server = subprocess.Popen(args, stdin=None, stdout=logf)
 			self.server.wait()
 			print("## SERVER STOPPED, code: " + str(self.server.returncode))
 			print("## Waiting 5 seconds before restarting...")
 			time.sleep(5)
+			if logf:
+				logf.close()
 			print("## Restarting now...")
 
 if __name__ == '__main__':

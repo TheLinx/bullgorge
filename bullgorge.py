@@ -3,6 +3,7 @@ from tkinter import ttk
 from tkinter import filedialog
 import argparse
 import os
+import subprocess
 
 parser = argparse.ArgumentParser(description='Guard a NS2 server from crashes.',
 	usage='%(prog)s [-h] [--no-gui] [--no-log] [--hlds PATH] [--server PATH] [server arguments]')
@@ -144,7 +145,8 @@ class Frontend(Frame):
 		self.fileframe.grid_forget()
 
 class Application():
-	options = dict()
+	options = {}
+	run = True
 	
 	def init_gui(self):
 		root = Tk()
@@ -207,9 +209,51 @@ class Application():
 			self.init_gui()
 		else:
 			self.init_cli()
+	
+	def check_paths(self):
+		os.chdir(self.hlds_path) # we want to be in the hldsupdatetool folder
+		open(self.hlds_exe).close() # check if the hldsupdatetool executable is here
+		open(os.path.join(self.server_path, self.server_exe)).close() # check if we can find the ns2 server exe
+	
+	def construct_commandline(self):
+		args = []
+		args.append(self.server_exe)
+		args.append('-save')
+		args.append('0')
+		if 'file' in self.options:
+			args.append('-file')
+			args.append(self.options['file'])
+			return args
+		args.append('-name')
+		args.append(self.options['name'])
+		args.append('-map')
+		args.append(self.options['map'])
+		if 'ip' in self.options:
+			args.append('-ip')
+			args.append(self.options['ip'])
+		args.append('-port')
+		args.append(str(self.options['port']))
+		args.append('-lan')
+		args.append(str(int(self.options['lan'])))
+		if 'password' in self.options:
+			args.append('-password')
+			args.append(self.options['password'])
+		return args
+
+	def guard_server(self):
+		os.chdir(self.server_path)
+		args = self.construct_commandline()
+		print("#### Bullgorge Initiated ####")
+		print("## Ready to start guarding...")
+		print("## Server commandline: " + " ".join(args))
+		print("## Terminate Bullgorge using Ctrl+C")
+		while self.run:
+			self.server = subprocess.Popen(args, stdin=None)
+			self.server.wait()
+			print("## SERVER STOPPED, code: " + str(self.server.returncode))
+			print("## Restarting...")
 
 if __name__ == '__main__':
 	app = Application(parser.parse_args())
-	print(app.hlds_path)
-	print(app.server_path)
-	print(app.options)
+	app.check_paths()
+	app.guard_server()

@@ -231,12 +231,13 @@ class Server():
 		if os.name == "nt":
 			self.hlds_exe = "hldsupdatetool.exe"
 			self.server_exe = "server.exe"
+			self.use_wine = False
 			if self.server_path[1] != ":": # assume it's a path relative to the hlds_path
 				self.server_path = os.path.join(self.hlds_path, self.server_path)
 		else:
 			self.hlds_exe = "hldsupdatetool"
 			self.server_exe = "server.exe"
-			self.use_wine = true
+			self.use_wine = True
 			if self.server_path[0] != '/': # assume it's a path relative to the hlds_path
 				self.server_path = os.path.join(self.hlds_path, self.server_path)
 	
@@ -275,24 +276,34 @@ class Server():
 		print("## Checking for initial updates...")
 		self.upd = Updatetool(srv)
 		self.upd.check_updates()
+		self.last_update = time.time()
+		self.last_version = self.upd.version
 		print("## Running Natural Selection 2 Dedicated Server v" + str(self.upd.version))
 	
 	def guard_server(self):
 		args = self.construct_commandline()
+		os.chdir(self.server_path)
 		print("#### Bullgorge Initiated ####")
 		print("## Ready to start guarding...")
 		print("## Server commandline: " + " ".join(args))
 		print("## Terminate Bullgorge using Ctrl+C")
 		while True: # this shouldn't be a problem...
-			os.chdir(self.server_path)
 			logf = None
 			if not self.args.no_log:
 				logfn = datetime.now().isoformat('-').replace(':', '-') + ".log"
 				print("## Opening log file '" + logfn + "'")
 				logf = open(logfn, 'wb')
-			self.server = subprocess.Popen(args, stdout=logf)
-			self.server.wait()
-			print("## SERVER STOPPED, code: " + str(self.server.returncode))
+			p = subprocess.Popen(args, stdout=logf, stderr=logf)
+			while not p.poll():
+				time.sleep(1)
+				if self.last_update + 300 <= time.time():
+					print("## Checking for updates...")
+					self.upd.check_updates()
+					if self.upd.version > self.last_version:
+						print("## New version detected! Shutting down server...")
+						p.terminate() # This will break out of the while loop
+					print("## Nothing new.")
+			print("## SERVER STOPPED, code: " + str(p.returncode))
 			print("## Waiting 5 seconds before restarting...")
 			time.sleep(5)
 			if logf:
@@ -303,4 +314,4 @@ if __name__ == '__main__':
 	srv = Server(parser.parse_args())
 	srv.check_paths()
 	srv.initial_updates()
-	#srv.guard_server()
+	srv.guard_server()

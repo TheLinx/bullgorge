@@ -4,13 +4,6 @@ from tkinter import filedialog
 import argparse
 import os
 
-if os.name == "nt":
-	hlds_exe = "hldsupdatetool.exe"
-	serv_exe = "server.exe"
-else:
-	hlds_exe = "hldsupdatetool"
-	serv_exe = "wine server.exe"
-
 parser = argparse.ArgumentParser(description='Guard a NS2 server from crashes.',
 	usage='%(prog)s [-h] [--no-gui] [--no-log] [server arguments]')
 parser.add_argument('--no-gui', help='suppress the GUI', action='store_true')
@@ -35,6 +28,7 @@ class Frontend(Frame):
 	def set_by_filedialog(self, stringvar):
 		def a():
 			stringvar.set(filedialog.askdirectory())
+		return a
 	
 	def createWidgets(self):
 		self.grid(column=0, row=0, sticky=(N, W, E, S))
@@ -106,17 +100,67 @@ class Frontend(Frame):
 		self.pack()
 		self.createWidgets()
 
-if __name__ == '__main__':
-	args = parser.parse_args()
-	if not args.no_gui:
+class Application():
+	options = dict()
+	
+	def init_gui(self):
 		root = Tk()
 		root.title("Bullgorge")
 
 		app = Frontend(master=root)
-		app.setValues(args)
+		app.setValues(self.args)
 		app.mainloop()
 		
 		if not app.start:
 			raise SystemExit
 		
-		print(app.hlds.get())
+		self.hlds_path = app.hlds.get()
+		self.server_path = app.server.get()
+		if app.sname.get() != "":
+			self.options['name'] = app.sname.get()
+		else:
+			self.options['name'] = "Natural Selection 2 Server"
+		self.options['map'] = app.mapn.get()
+		if app.ip.get() != "":
+			self.options['ip'] = app.ip.get()
+		self.options['port'] = app.port.get()
+		self.options['limit'] = app.limit.get()
+		self.options['lan'] = bool(app.lan.get())
+		if app.password.get() != "":
+			self.options['password'] = app.password.get()
+	
+	def init_cli(self):
+		self.hlds_path = self.args.hlds
+		self.server_path = self.args.server
+		if self.args.name != "":
+			self.options['name'] = self.args.name
+		else:
+			self.options['name'] = "Natural Selection 2 Server"
+		self.options['map'] = self.args.map
+		if self.args.ip != "":
+			self.options['ip'] = self.args.ip
+		self.options['port'] = self.args.port
+		self.options['limit'] = self.args.limit
+		self.options['lan'] = self.args.lan
+		if self.args.password != "":
+			self.options['password'] = self.args.password
+	
+	def __init__(self, args):
+		if os.name == "nt":
+			self.hlds_exe = "hldsupdatetool.exe"
+			self.server_exe = "server.exe"
+		else:
+			self.hlds_exe = "hldsupdatetool"
+			self.server_exe = "wine server.exe"
+		self.args = args
+		self.gui = not args.no_gui
+		if self.gui:
+			self.init_gui()
+		else:
+			self.init_cli()
+
+if __name__ == '__main__':
+	app = Application(parser.parse_args())
+	print(app.hlds_path)
+	print(app.server_path)
+	print(app.options)

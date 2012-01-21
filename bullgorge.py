@@ -314,4 +314,10 @@ if __name__ == '__main__':
 	srv = Server(parser.parse_args())
 	srv.check_paths()
 	srv.initial_updates()
-	srv.guard_server()
+	try:
+		srv.guard_server()
+	except:
+		print("## Something went wrong in Bullgorge! Mayday, mayday, we're going down!")
+		if srv.server.poll():
+			srv.server.terminate() # make sure the server dies if we do
+			srv.server.wait()

@@ -228,11 +228,13 @@ class Server():
 			self.init_gui()
 		else:
 			self.init_cli()
+		if self.server_path == '':
+			self.server_path = '.'
 		if os.name == "nt":
 			self.hlds_exe = "hldsupdatetool.exe"
 			self.server_exe = "server.exe"
 			self.use_wine = False
-			if self.server_path[1] != ":": # assume it's a path relative to the hlds_path
+			if len(self.server_path) < 1 or self.server_path[1] != ":": # assume it's a path relative to the hlds_path
 				self.server_path = os.path.join(self.hlds_path, self.server_path)
 		else:
 			self.hlds_exe = "hldsupdatetool"

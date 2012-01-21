@@ -3,7 +3,9 @@ from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
 import argparse
+import io
 import os
+import re
 import subprocess
 import time
 
@@ -21,6 +23,25 @@ parser.add_argument('--port', help='port to use', type=int, default='27015')
 parser.add_argument('--limit', help='player slots', type=int, default=12)
 parser.add_argument('--lan', help='show server in server browser', action='store_true')
 parser.add_argument('--password', help='require a password to join', default='')
+
+class Updatetool():
+	ver_regex = re.compile("Installing 'Natural Selection 2 - Dedicated Server' version (\d+)")
+
+	def construct_commandline(self):
+		args = []
+		args.append(os.path.join(self.srv.hlds_path, self.srv.hlds_exe))
+		args.extend(['-command', 'update', '-game', 'naturalselection2', '-dir'])
+		args.append(self.srv.server_path)
+		return args
+
+	def check_updates(self):
+		args = self.construct_commandline()
+		s = subprocess.Popen(args, stdout=subprocess.PIPE).communicate()
+		m = self.ver_regex.search(str(s))
+		self.version = int(m.group(1))
+	
+	def __init__(self, srv):
+		self.srv = srv
 
 class Frontend(Frame):
 	start = False
@@ -146,7 +167,7 @@ class Frontend(Frame):
 		self.createWidgets()
 		self.fileframe.grid_forget()
 
-class Application():
+class Server():
 	options = {}
 	
 	def init_gui(self):
@@ -200,26 +221,33 @@ class Application():
 			self.options['password'] = self.args.password
 	
 	def __init__(self, args):
-		if os.name == "nt":
-			self.hlds_exe = "hldsupdatetool.exe"
-			self.server_exe = "server.exe"
-		else:
-			self.hlds_exe = "hldsupdatetool"
-			self.server_exe = "wine server.exe"
+		print("#### Initializing Bullgorge ####")
 		self.args = args
 		self.gui = not args.no_gui
 		if self.gui:
 			self.init_gui()
 		else:
 			self.init_cli()
+		if os.name == "nt":
+			self.hlds_exe = "hldsupdatetool.exe"
+			self.server_exe = "server.exe"
+			if self.server_path[1] != ":": # assume it's a path relative to the hlds_path
+				self.server_path = os.path.join(self.hlds_path, self.server_path)
+		else:
+			self.hlds_exe = "hldsupdatetool"
+			self.server_exe = "server.exe"
+			self.use_wine = true
+			if self.server_path[0] != '/': # assume it's a path relative to the hlds_path
+				self.server_path = os.path.join(self.hlds_path, self.server_path)
 	
 	def check_paths(self):
-		os.chdir(self.hlds_path) # we want to be in the hldsupdatetool folder
-		open(self.hlds_exe).close() # check if the hldsupdatetool executable is here
-		open(os.path.join(self.server_path, self.server_exe)).close() # check if we can find the ns2 server exe
+		open(os.path.join(self.hlds_path, self.hlds_exe)).close() # check if we can find the hldsupdatetool executable
+		open(os.path.join(self.server_path, self.server_exe)).close() # check if we can find the ns2 server executable
 	
 	def construct_commandline(self):
 		args = []
+		if self.use_wine:
+			args.append('wine')
 		args.append(self.server_exe)
 		args.append('-save')
 		args.append('0')
@@ -243,20 +271,26 @@ class Application():
 			args.append(self.options['password'])
 		return args
 
+	def initial_updates(self):
+		print("## Checking for initial updates...")
+		self.upd = Updatetool(srv)
+		self.upd.check_updates()
+		print("## Running Natural Selection 2 Dedicated Server v" + str(self.upd.version))
+	
 	def guard_server(self):
-		os.chdir(self.server_path)
 		args = self.construct_commandline()
 		print("#### Bullgorge Initiated ####")
 		print("## Ready to start guarding...")
 		print("## Server commandline: " + " ".join(args))
 		print("## Terminate Bullgorge using Ctrl+C")
 		while True: # this shouldn't be a problem...
+			os.chdir(self.server_path)
 			logf = None
 			if not self.args.no_log:
 				logfn = datetime.now().isoformat('-').replace(':', '-') + ".log"
 				print("## Opening log file '" + logfn + "'")
 				logf = open(logfn, 'wb')
-			self.server = subprocess.Popen(args, stdin=None, stdout=logf)
+			self.server = subprocess.Popen(args, stdout=logf)
 			self.server.wait()
 			print("## SERVER STOPPED, code: " + str(self.server.returncode))
 			print("## Waiting 5 seconds before restarting...")
@@ -266,6 +300,7 @@ class Application():
 			print("## Restarting now...")
 
 if __name__ == '__main__':
-	app = Application(parser.parse_args())
-	app.check_paths()
-	app.guard_server()
+	srv = Server(parser.parse_args())
+	srv.check_paths()
+	srv.initial_updates()
+	#srv.guard_server()

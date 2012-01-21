@@ -5,11 +5,12 @@ import argparse
 import os
 
 parser = argparse.ArgumentParser(description='Guard a NS2 server from crashes.',
-	usage='%(prog)s [-h] [--no-gui] [--no-log] [server arguments]')
+	usage='%(prog)s [-h] [--no-gui] [--no-log] [--hlds PATH] [--server PATH] [server arguments]')
 parser.add_argument('--no-gui', help='suppress the GUI', action='store_true')
 parser.add_argument('--no-log', help="don't store server logs", action='store_true')
 parser.add_argument('--hlds', help='path of hldsupdatetool', default='.')
 parser.add_argument('--server', help='path of NS2 server executable', default='ns2')
+parser.add_argument('--file', help='a server.xml info file', default='')
 parser.add_argument('--name', help='server name to be shown in server browser', default='')
 parser.add_argument('--map', help='map to load', default='ns2_summit')
 parser.add_argument('--ip', help='ip address to bind to', default='')
@@ -25,10 +26,30 @@ class Frontend(Frame):
 		self.start = True
 		self.master.quit()
 
-	def set_by_filedialog(self, stringvar):
+	def set_by_askdirectory(self, stringvar):
 		def a():
 			stringvar.set(filedialog.askdirectory())
 		return a
+	
+	def set_by_askopenfilename(self, stringvar):
+		def a():
+			stringvar.set(filedialog.askopenfilename())
+		return a
+	
+	def toggle_file(self, event):
+		self.use_file = not self.use_file
+		if self.use_file:
+			relief = 'sunken'
+			text = "Configuration File"
+			self.valuesframe.grid_forget()
+			self.fileframe.grid(column=1, row=5, columnspan=2)
+		else:
+			relief = 'raised'
+			text = "Values"
+			self.valuesframe.grid(column=1, row=4, sticky=(N, W, E, S), columnspan=2)
+			self.fileframe.grid_forget()
+		event.widget['text'] = text
+		event.widget['relief'] = relief
 	
 	def createWidgets(self):
 		self.grid(column=0, row=0, sticky=(N, W, E, S))
@@ -41,7 +62,7 @@ class Frontend(Frame):
 		hldsframe.grid(column=2, row=1, sticky=(N, W, E, S))
 		ttk.Entry(hldsframe, width=20, textvariable=self.hlds).grid(column=1, row=1, sticky=(W, E))
 		ttk.Button(hldsframe, width=2, text="...",
-			command=self.set_by_filedialog(self.hlds)).grid(column=2, row=1, sticky=E)
+			command=self.set_by_askdirectory(self.hlds)).grid(column=2, row=1, sticky=E)
 
 		self.server = StringVar()
 		ttk.Label(self, text="Server Executable Path").grid(column=1, row=2, sticky=E)
@@ -49,40 +70,61 @@ class Frontend(Frame):
 		serverframe.grid(column=2, row=2, sticky=(N, W, E, S))
 		ttk.Entry(serverframe, width=20, textvariable=self.server).grid(column=1, row=1, sticky=(W, E))
 		ttk.Button(serverframe, width=2, text="...",
-			command=self.set_by_filedialog(self.server)).grid(column=2, row=1, sticky=E)
+			command=self.set_by_askdirectory(self.server)).grid(column=2, row=1, sticky=E)
 
-		self.sname = StringVar()
-		ttk.Label(self, text="Server Name").grid(column=1, row=3, sticky=E)
-		ttk.Entry(self, width=20, textvariable=self.sname).grid(column=2, row=3, sticky=(W, E))
+		self.use_file = False
+		values_toggle = ttk.Label(self, text="Values", relief='raised', borderwidth=4, anchor=CENTER)
+		values_toggle.grid(column=1, row=3, sticky=(N, W, E, S), columnspan=2)
+		values_toggle.bind("<ButtonPress-1>", self.toggle_file)
 
-		self.mapn = StringVar()
-		ttk.Label(self, text="Map Name").grid(column=1, row=4, sticky=E)
-		ttk.Entry(self, width=20, textvariable=self.mapn).grid(column=2, row=4, sticky=(W, E))
+		self.valuesframe = ttk.Frame(self)
+		self.valuesframe.grid(column=1, row=4, sticky=(N, W, E, S), columnspan=2)
+		self.valuesframe.columnconfigure(0, weight=1)
+		if 1: # valuesframe 
+			self.sname = StringVar()
+			ttk.Label(self.valuesframe, text="Server Name").grid(column=1, row=1, sticky=E)
+			ttk.Entry(self.valuesframe, width=20, textvariable=self.sname).grid(column=2, row=1, sticky=(W, E))
 
-		self.ip = StringVar()
-		ttk.Label(self, text="IP").grid(column=1, row=5, sticky=E)
-		ttk.Entry(self, width=20, textvariable=self.ip).grid(column=2, row=5, sticky=(W, E))
+			self.mapn = StringVar()
+			ttk.Label(self.valuesframe, text="Map Name").grid(column=1, row=2, sticky=E)
+			ttk.Entry(self.valuesframe, width=20, textvariable=self.mapn).grid(column=2, row=2, sticky=(W, E))
 
-		self.port = IntVar()
-		ttk.Label(self, text="Port").grid(column=1, row=6, sticky=E)
-		ttk.Entry(self, width=20, textvariable=self.port).grid(column=2, row=6, sticky=(W, E))
+			self.ip = StringVar()
+			ttk.Label(self.valuesframe, text="IP").grid(column=1, row=3, sticky=E)
+			ttk.Entry(self.valuesframe, width=20, textvariable=self.ip).grid(column=2, row=3, sticky=(W, E))
 
-		self.limit = IntVar()
-		ttk.Label(self, text="Player Limit").grid(column=1, row=7, sticky=E)
-		ttk.Entry(self, width=20, textvariable=self.limit).grid(column=2, row=7, sticky=(W, E))
+			self.port = IntVar()
+			ttk.Label(self.valuesframe, text="Port").grid(column=1, row=4, sticky=E)
+			ttk.Entry(self.valuesframe, width=20, textvariable=self.port).grid(column=2, row=4, sticky=(W, E))
 
-		self.lan = BooleanVar()
-		ttk.Label(self, text="LAN").grid(column=1, row=8, sticky=E)
-		ttk.Checkbutton(self, width=20, variable=self.lan).grid(column=2, row=8, sticky=(W, E))
+			self.limit = IntVar()
+			ttk.Label(self.valuesframe, text="Player Limit").grid(column=1, row=5, sticky=E)
+			ttk.Entry(self.valuesframe, width=20, textvariable=self.limit).grid(column=2, row=5, sticky=(W, E))
 
-		self.password = StringVar()
-		ttk.Label(self, text="Password").grid(column=1, row=9, sticky=E)
-		ttk.Entry(self, width=20, textvariable=self.password).grid(column=2, row=9, sticky=(W, E))
+			self.lan = BooleanVar()
+			ttk.Label(self.valuesframe, text="LAN").grid(column=1, row=6, sticky=E)
+			ttk.Checkbutton(self.valuesframe, width=20, variable=self.lan).grid(column=2, row=6, sticky=(W, E))
 
-		ttk.Button(self, text="Start Server", command=self.start_server).grid(column=1, row=10,
+			self.password = StringVar()
+			ttk.Label(self.valuesframe, text="Password").grid(column=1, row=7, sticky=E)
+			ttk.Entry(self.valuesframe, width=20, textvariable=self.password).grid(column=2, row=7, sticky=(W, E))
+
+		self.fileframe = ttk.Frame(self)
+		self.fileframe.grid(column=1, row=5, columnspan=2)
+		self.fileframe.columnconfigure(0, weight=1)
+		if 1: # fileframe 
+			self.file = StringVar()
+			ttk.Label(self.fileframe, text="Config File").grid(column=1, row=1, sticky=E, padx=50)
+			ttk.Entry(self.fileframe, width=20, textvariable=self.file).grid(column=2, row=1, sticky=(W, E))
+			ttk.Button(self.fileframe, width=2, text="...",
+				command=self.set_by_askopenfilename(self.file)).grid(column=3, row=1, sticky=E)
+
+		ttk.Button(self, text="Start Server", command=self.start_server).grid(column=1, row=6,
 			sticky=(N, W, E, S), columnspan=2)
 
 		for child in self.winfo_children(): child.grid_configure(padx=3, pady=3)
+		for child in self.valuesframe.winfo_children(): child.grid_configure(padx=3, pady=3)
+		for child in self.fileframe.winfo_children(): child.grid_configure(padx=3, pady=3)
 	
 	def setValues(self, args):
 		self.hlds.set(args.hlds)
@@ -99,6 +141,7 @@ class Frontend(Frame):
 		Frame.__init__(self, master)
 		self.pack()
 		self.createWidgets()
+		self.fileframe.grid_forget()
 
 class Application():
 	options = dict()
@@ -116,6 +159,9 @@ class Application():
 		
 		self.hlds_path = app.hlds.get()
 		self.server_path = app.server.get()
+		if app.use_file:
+			self.options['file'] = app.file.get()
+			return
 		if app.sname.get() != "":
 			self.options['name'] = app.sname.get()
 		else:
@@ -132,6 +178,9 @@ class Application():
 	def init_cli(self):
 		self.hlds_path = self.args.hlds
 		self.server_path = self.args.server
+		if self.args.file != "":
+			self.options['file'] = self.args.file
+			return
 		if self.args.name != "":
 			self.options['name'] = self.args.name
 		else:

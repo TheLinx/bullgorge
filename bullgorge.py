@@ -4,6 +4,7 @@ from tkinter import filedialog
 import argparse
 import os
 import subprocess
+import time
 
 parser = argparse.ArgumentParser(description='Guard a NS2 server from crashes.',
 	usage='%(prog)s [-h] [--no-gui] [--no-log] [--hlds PATH] [--server PATH] [server arguments]')
@@ -146,7 +147,6 @@ class Frontend(Frame):
 
 class Application():
 	options = {}
-	run = True
 	
 	def init_gui(self):
 		root = Tk()
@@ -176,6 +176,8 @@ class Application():
 		self.options['lan'] = bool(app.lan.get())
 		if app.password.get() != "":
 			self.options['password'] = app.password.get()
+		
+		root.withdraw()
 	
 	def init_cli(self):
 		self.hlds_path = self.args.hlds
@@ -247,11 +249,13 @@ class Application():
 		print("## Ready to start guarding...")
 		print("## Server commandline: " + " ".join(args))
 		print("## Terminate Bullgorge using Ctrl+C")
-		while self.run:
+		while True: # this shouldn't be a problem...
 			self.server = subprocess.Popen(args, stdin=None)
 			self.server.wait()
 			print("## SERVER STOPPED, code: " + str(self.server.returncode))
-			print("## Restarting...")
+			print("## Waiting 5 seconds before restarting...")
+			time.sleep(5)
+			print("## Restarting now...")
 
 if __name__ == '__main__':
 	app = Application(parser.parse_args())

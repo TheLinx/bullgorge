@@ -172,6 +172,7 @@ class Frontend(Frame):
 class Server():
 	options = {}
 	server = None
+	runserver = True
 	
 	def init_gui(self):
 		root = Tk()
@@ -203,6 +204,13 @@ class Server():
 			self.options['password'] = app.password.get()
 		
 		root.destroy()
+
+		# spawn an output console
+		event = threading.Event()
+		self.cls = Console(event)
+		event.wait() # wait until the console is ready for output before we connect the pipes
+		sys.stdout = self.cls
+		sys.stderr = self.cls
 	
 	def init_cli(self):
 		self.hlds_path = self.args.hlds
@@ -288,12 +296,13 @@ class Server():
 	def guard_server(self):
 		args = self.construct_commandline()
 		os.chdir(self.server_path)
+		global cls
 		print("#### Bullgorge Initiated ####")
 		print("## Ready to start guarding...")
 		print("## Server commandline: " + " ".join(args))
 		if not self.gui:
 			print("## Terminate Bullgorge using Ctrl+C")
-		while True: # this shouldn't be a problem...
+		while self.runserver: # this shouldn't be a problem...
 			logf = None
 			if not self.args.no_log:
 				logfn = datetime.now().isoformat('-').replace(':', '-') + ".log"
@@ -303,9 +312,9 @@ class Server():
 			while not p.poll():
 				time.sleep(1)
 				if self.gui:
-					global cls
-					if not cls.is_alive(): # if the console has been closed, we need to kill ourselves
-						raise SystemExit
+					if not self.cls.is_alive(): # if the console has been closed, we need to kill ourselves
+						self.runserver = False # tell Bullgorge to stop respawning the server
+						p.terminate() # and then kill the server
 				if self.last_update + 300 <= time.time():
 					print("## Checking for updates...")
 					self.upd.check_updates()
@@ -314,11 +323,12 @@ class Server():
 						p.terminate() # This will break out of the while loop
 					print("## Nothing new.")
 			print("## SERVER STOPPED, code: " + str(p.returncode))
-			print("## Waiting 5 seconds before restarting...")
-			time.sleep(5)
 			if logf:
 				logf.close()
-			print("## Restarting now...")
+			if self.runserver:
+				print("## Waiting 5 seconds before restarting...")
+				time.sleep(5)
+				print("## Restarting now...")
 
 class Console(threading.Thread):
 	def write(self, buf):
@@ -336,35 +346,29 @@ class Console(threading.Thread):
 		self.view.grid(column=1, row=1, sticky=(N, W, E, S))
 		self.root.protocol("WM_DELETE_WINDOW", self.callback)
 
-		with self.cond:
-			self.cond.notify() # we're ready to go!
+		self.root.after(100, self.ev.set)
 		self.root.mainloop()
 	
-	def __init__(self, cond):
+	def __init__(self, ev):
+		self.ev = ev
 		threading.Thread.__init__(self)
-		self.cond = cond
 		self.start()
 
 if __name__ == '__main__':
 	srv = Server(parser.parse_args())
-	if srv.gui:
-		condition = threading.Condition()
-		condition.acquire()
-		global cls
-		cls = Console(condition)
-		condition.wait() # wait until the console is ready for output before we connect the pipes
-		sys.stdout = cls
-		sys.stderr = cls
 	try:
 		srv.check_paths()
 		srv.initial_updates()
 		srv.guard_server()
+	except (KeyboardInterrupt, SystemExit):
+		raise # go to clean exit
 	except Exception as e:
 		print(e)
 		print("## Mayday, mayday, we're going down!")
+		raise # go to clean exit
+	except: # clean up before we go
 		if srv.server != None and srv.server.poll():
 			srv.server.terminate() # make sure the server dies if we do
 			srv.server.wait()
-		if cls != None:
-			cls.join() # just wait until the console is closed
-		raise SystemExit
+		if srv.gui:
+			srv.cls.join() # just wait until the console is closed

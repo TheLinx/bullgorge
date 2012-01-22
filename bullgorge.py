@@ -291,7 +291,8 @@ class Server():
 		print("#### Bullgorge Initiated ####")
 		print("## Ready to start guarding...")
 		print("## Server commandline: " + " ".join(args))
-		print("## Terminate Bullgorge using Ctrl+C")
+		if not self.gui:
+			print("## Terminate Bullgorge using Ctrl+C")
 		while True: # this shouldn't be a problem...
 			logf = None
 			if not self.args.no_log:
@@ -301,6 +302,10 @@ class Server():
 			p = subprocess.Popen(args, stdout=logf, stderr=logf)
 			while not p.poll():
 				time.sleep(1)
+				if self.gui:
+					global cls
+					if not cls.is_alive(): # if the console has been closed, we need to kill ourselves
+						raise SystemExit
 				if self.last_update + 300 <= time.time():
 					print("## Checking for updates...")
 					self.upd.check_updates()
@@ -345,6 +350,7 @@ if __name__ == '__main__':
 	if srv.gui:
 		condition = threading.Condition()
 		condition.acquire()
+		global cls
 		cls = Console(condition)
 		condition.wait() # wait until the console is ready for output before we connect the pipes
 		sys.stdout = cls
@@ -361,4 +367,4 @@ if __name__ == '__main__':
 			srv.server.wait()
 		if cls != None:
 			cls.join() # just wait until the console is closed
-		raise SystemError
+		raise SystemExit

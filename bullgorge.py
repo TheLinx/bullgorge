@@ -1,13 +1,15 @@
 from datetime import datetime
 from tkinter import *
-from tkinter import ttk
 from tkinter import filedialog
+from tkinter import scrolledtext
+from tkinter import ttk
 import argparse
 import io
 import os
 import re
 import subprocess
 import time
+import threading
 
 parser = argparse.ArgumentParser(description='Guard a NS2 server from crashes.',
 	usage='%(prog)s [-h] [--no-gui] [--no-log] [--hlds PATH] [--server PATH] [server arguments]')
@@ -169,6 +171,7 @@ class Frontend(Frame):
 
 class Server():
 	options = {}
+	server = None
 	
 	def init_gui(self):
 		root = Tk()
@@ -199,7 +202,7 @@ class Server():
 		if app.password.get() != "":
 			self.options['password'] = app.password.get()
 		
-		root.withdraw()
+		root.destroy()
 	
 	def init_cli(self):
 		self.hlds_path = self.args.hlds
@@ -312,14 +315,50 @@ class Server():
 				logf.close()
 			print("## Restarting now...")
 
+class Console(threading.Thread):
+	def write(self, buf):
+		for line in buf.rstrip().splitlines():
+			self.view.insert(END, line.rstrip() + "\n")
+	
+	def callback(self):
+		self.root.destroy()
+
+	def run(self):
+		self.root = Tk()
+		self.root.title("Bullgorge Console")
+
+		self.view = scrolledtext.ScrolledText(self.root)
+		self.view.grid(column=1, row=1, sticky=(N, W, E, S))
+		self.root.protocol("WM_DELETE_WINDOW", self.callback)
+
+		with self.cond:
+			self.cond.notify() # we're ready to go!
+		self.root.mainloop()
+	
+	def __init__(self, cond):
+		threading.Thread.__init__(self)
+		self.cond = cond
+		self.start()
+
 if __name__ == '__main__':
 	srv = Server(parser.parse_args())
-	srv.check_paths()
-	srv.initial_updates()
+	if srv.gui:
+		condition = threading.Condition()
+		condition.acquire()
+		cls = Console(condition)
+		condition.wait() # wait until the console is ready for output before we connect the pipes
+		sys.stdout = cls
+		sys.stderr = cls
 	try:
+		srv.check_paths()
+		srv.initial_updates()
 		srv.guard_server()
-	except:
-		print("## Something went wrong in Bullgorge! Mayday, mayday, we're going down!")
-		if srv.server.poll():
+	except Exception as e:
+		print(e)
+		print("## Mayday, mayday, we're going down!")
+		if srv.server != None and srv.server.poll():
 			srv.server.terminate() # make sure the server dies if we do
 			srv.server.wait()
+		if cls != None:
+			cls.join() # just wait until the console is closed
+		raise SystemError

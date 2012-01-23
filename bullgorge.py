@@ -318,6 +318,7 @@ class Server():
 				if self.last_update + 300 <= time.time():
 					print("## Checking for updates...")
 					self.upd.check_updates()
+					self.last_update = time.time()
 					if self.upd.version > self.last_version:
 						print("## New version detected! Shutting down server...")
 						p.terminate() # This will break out of the while loop

@@ -278,6 +278,8 @@ class Server():
 			args.append(self.options['ip'])
 		args.append('-port')
 		args.append(str(self.options['port']))
+		args.append('-limit')
+		args.append(str(self.options['limit']))
 		args.append('-lan')
 		args.append(str(int(self.options['lan'])))
 		if 'password' in self.options:

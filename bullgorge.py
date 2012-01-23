@@ -309,7 +309,7 @@ class Server():
 				print("## Opening log file '" + logfn + "'")
 				logf = open(logfn, 'wb')
 			p = subprocess.Popen(args, stdout=logf, stderr=logf)
-			while not p.poll():
+			while p.poll() == None:
 				time.sleep(1)
 				if self.gui:
 					if not self.cls.is_alive(): # if the console has been closed, we need to kill ourselves

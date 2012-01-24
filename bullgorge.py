@@ -36,10 +36,15 @@ class Updatetool():
 		args.append(self.srv.server_path)
 		return args
 
-	def check_updates(self):
+	def check_updates(self, raise_on_fail=False):
 		args = self.construct_commandline()
 		s = subprocess.Popen(args, stdout=subprocess.PIPE).communicate()
 		m = self.ver_regex.search(str(s))
+		if m == None:
+			if raise_on_fail:
+				raise Exception
+			else:
+				return
 		self.version = int(m.group(1))
 	
 	def __init__(self, srv):
@@ -290,7 +295,7 @@ class Server():
 	def initial_updates(self):
 		print("## Checking for initial updates...")
 		self.upd = Updatetool(srv)
-		self.upd.check_updates()
+		self.upd.check_updates(raise_on_fail=True)
 		self.last_update = time.time()
 		self.last_version = self.upd.version
 		print("## Running Natural Selection 2 Dedicated Server v" + str(self.upd.version))
